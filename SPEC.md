@@ -7,7 +7,7 @@ downloadable files.
 **Site title**: Зарубіжна література в українській школі
 **Domain**: `zarlit.com.ua` · **Files**: `files.zarlit.com.ua`
 
-Status: v1.5, milestones 1–3 built · Language of the site: Ukrainian only
+Status: v1.7, milestones 1–4 built · Language of the site: Ukrainian only
 
 > Items marked **TODO** below are placeholders: they are wired into the code so nothing is
 > blocked, and swapping in the real text is a one-line edit in `src/data/site.ts`.
@@ -243,22 +243,48 @@ A **separate local application**, never deployed, run with `npm run admin`. It e
 hand-writing frontmatter and hand-uploading to a storage dashboard is tedious and error-prone.
 
 - **Form fields**: grade, title, description, topic, work, attachments (drag-and-drop files),
-  Markdown body, draft toggle.
+  lesson body, draft toggle.
+- **The body is edited visually**, not as raw Markdown: a TipTap editor with headings,
+  bold, italic, lists, quotes and links, styled to match the lesson page's own typography.
+  It still *stores* Markdown — every keystroke is serialised through `tiptap-markdown`, and
+  a "Показати Markdown" toggle reveals exactly what will be written to the file, and lets
+  it be edited directly. The editor is configured with `html: false`, matching the site's
+  renderer: HTML in a lesson body would be escaped and shown as visible tags, so the editor
+  must never produce any.
+
+  One consequence worth knowing: opening a hand-written lesson in the editor re-flows its
+  paragraphs onto single lines, since a soft wrap in Markdown is not a line break. The
+  rendered page is identical; the diff is not.
 - **On submit**: uploads each file to R2 under `<grade>/<slug>-<label>.<ext>`, reads back size
   and public URL, then writes `content/lessons/<grade>/<slug>.md` with complete frontmatter.
-- **Reorder view**: lists lessons in a grade, drag to reorder, writes new `order` values back to
-  the affected Markdown files.
-- **Edit/delete**: edit an existing lesson's fields; delete removes the Markdown file and,
-  on confirmation, the R2 objects.
+- **Reorder view**: lists lessons in a grade; drag, or use arrow buttons, and the new
+  `order` values are written to the affected files immediately. Arrows exist alongside drag
+  because they work by keyboard and on a touchpad, and the list is short.
+- **Edit/delete**: edit an existing lesson's fields; delete asks, inline, whether to remove
+  the storage objects as well as the record. That choice is made explicitly in the row
+  rather than through a confirmation dialog, because it is the one action here that
+  destroys something unrecoverable.
 - The admin does **not** commit or push — you review `git diff` and push yourself. Deliberate:
   a git diff is the last safety net before the site is public.
 
-**Implementation**: an Express server plus a small React SPA under `admin/`, sharing the Vite
-config, Tailwind theme, and shadcn components with the site — the main practical gain from
-dropping Astro, since both halves are now the same kind of app. Talks to R2 via
-`@aws-sdk/client-s3` (R2 is S3-compatible). Credentials come from a local `.env` that is
-gitignored. It has its own entry point and no production build target, so there is no way
-for it to ship to the public site.
+**Implementation**: a React app under `admin/` with its own Vite config, sharing the
+Tailwind theme and shadcn components with the site. The Express API is mounted into that
+Vite dev server as middleware, so `npm run admin` is one process on one port with no proxy
+to configure. It binds to `127.0.0.1`: a tool that writes files and deletes storage objects
+should not be reachable from whatever network the laptop is on. It has no production build
+target, and nothing in `src/` imports it, so it cannot reach the public site — the build
+output contains none of its code or dependencies.
+
+Talks to R2 via `@aws-sdk/client-s3` (R2 is S3-compatible), with credentials from a
+gitignored `.env`. **Without credentials it still runs**: uploading is disabled and a file
+URL is pasted instead, so the tool is usable before the bucket exists.
+
+Slugs are generated server-side by transliterating the title with the official Ukrainian
+table (Cabinet of Ministers resolution No. 55), so `Ґете. «Вільшаний король»` becomes
+`gete-vilshanyi-korol`. A slug is **fixed once the lesson exists** — it is the page's URL,
+and renaming it would break every link already shared — so the slug and grade are read-only
+when editing. Frontmatter is written in a fixed key order, so generated files read like the
+hand-written ones and later edits produce minimal diffs.
 
 ---
 
@@ -374,8 +400,11 @@ zarlit/
 3. **Ship** ✅ — GitHub Actions deploy, `CNAME`, SEO tags, sitemap, structured data,
    link-preview image, analytics. Going live now needs only the accounts and DNS set up
    (README, "First-time setup") — no further code.
-4. **Admin tool** — R2 upload, Markdown generation, reordering, edit/delete.
+4. **Admin tool** ✅ — R2 upload, Markdown generation, reordering, edit/delete.
 5. **Fill** — bulk-add real lessons; refine UI against real content.
+
+Milestone 4 landed after milestone 3 as planned: hand-writing the first lessons settled what
+the form actually needed, so the tool was built once rather than twice.
 
 Milestones 1–3 produce a live, usable site. The admin tool is a productivity investment that
 only pays off once the shape of the content is settled — hence its position after launch.

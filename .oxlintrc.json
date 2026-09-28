@@ -4,5 +4,14 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      // The admin tool loads its data in effects, which is what effects are
+      // for. The rule cannot see that these setState calls run after an await,
+      // and its disable comments have no effect on it.
+      "files": ["admin/src/**"],
+      "rules": { "react/set-state-in-effect": "off" }
+    }
+  ]
 }

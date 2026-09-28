@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+/*
+  The admin tool (admin/vite.config.ts) has its own Vite root, so Tailwind's
+  automatic source detection does not reach the shared components in src/.
+  Declaring the source explicitly makes both builds scan the same files, and
+  keeps classes used only inside src/components/ui from silently vanishing.
+*/
+@source '../';
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*

@@ -13,18 +13,36 @@ npm run build    # validate content, typecheck, build, prerender → dist/
 npm run preview  # serve dist/ at http://localhost:4173
 npm run lint
 npm run og       # regenerate public/og.jpg (macOS only)
+npm run admin    # local authoring tool, http://127.0.0.1:5174
 ```
 
 ## Adding a lesson
 
-Lessons are Markdown files in `content/lessons/<grade>/<slug>.md`. Frontmatter is validated
-on every build, so a mistake fails the build instead of shipping. See SPEC.md §3 for the
-fields; copy an existing file to start.
+Run `npm run admin`, fill in the form, attach the files. It uploads each file to R2, reads
+back its size and URL, and writes `content/lessons/<grade>/<slug>.md` for you. It also
+reorders lessons within a grade, edits them, and deletes them.
 
-`npm run dev` rebuilds and reloads when a lesson file changes.
+**It never commits.** Review `git diff`, then push — that diff is the last check before the
+site is public. Publishing is:
 
-Publishing is: upload the file to R2 → write the Markdown file → check in `npm run dev` →
-review `git diff` → push to `main`. The deploy runs itself from there.
+    npm run admin → review git diff → commit → push to main → live in about a minute
+
+Lessons are plain Markdown, so writing one by hand is equally valid; copy an existing file
+and see SPEC.md §3 for the fields. Frontmatter is validated on every build, so a mistake
+fails the build instead of shipping. `npm run dev` reloads when a lesson file changes.
+
+Notes on the admin tool:
+
+- The lesson body is written in a visual editor (headings, lists, bold, links), but stored
+  as Markdown. "Показати Markdown" switches to the raw text when you want it. Opening a
+  hand-written lesson re-flows its paragraphs onto single lines — the page renders the
+  same, but the diff will show it.
+- Without R2 credentials it still runs — file upload is disabled, and you paste a file URL
+  instead. Fill in `.env` (see `.env.example`) to enable uploads.
+- A lesson's address is fixed once created. Renaming would break links teachers have
+  already shared, so the slug and grade are read-only when editing.
+- Deleting asks whether to remove the files from storage too; removing only the record
+  leaves the files reachable by anyone who already has the link.
 
 ## First-time setup
 
@@ -74,9 +92,8 @@ loads at all, which keeps local development out of the numbers.
 
 ## Status
 
-Milestones 1–3 of 5 done: scaffold and pages; Markdown content pipeline with build-time
-prerendering; deploy workflow, custom domain, SEO tags and analytics. The site is ready to
-go live as soon as the setup above is done.
+Milestones 1–4 of 5 done: scaffold and pages; Markdown content pipeline with build-time
+prerendering; deploy workflow, custom domain, SEO and analytics; local admin tool. The site
+is ready to go live as soon as the setup above is done.
 
-Next: milestone 4, the local admin tool for uploading files and writing lesson files.
-See SPEC.md §11.
+Next: milestone 5 — fill in real lessons and refine the UI against them. See SPEC.md §11.
