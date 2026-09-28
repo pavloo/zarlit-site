@@ -7,7 +7,7 @@ downloadable files.
 **Site title**: Зарубіжна література в українській школі
 **Domain**: `zarlit.com.ua` · **Files**: `files.zarlit.com.ua`
 
-Status: draft v1.3 · Language of the site: Ukrainian only
+Status: v1.5, milestones 1–3 built · Language of the site: Ukrainian only
 
 > Items marked **TODO** below are placeholders: they are wired into the code so nothing is
 > blocked, and swapping in the real text is a one-line edit in `src/data/site.ts`.
@@ -78,7 +78,7 @@ script compiles the Markdown into a validated JSON index, then Vite builds the R
 |---|---|---|
 | Framework | **React 19 + Vite 7**, TypeScript | Plain React app, no framework conventions to learn; one toolchain shared with the admin tool |
 | Routing | **React Router** (declarative routes) | Standard, familiar; the route list doubles as the prerender manifest |
-| Static output | **`vite-react-ssg`** | Renders every route to a real HTML file at build time — preserves SEO and link previews, which a plain SPA loses |
+| Static output | React Router's own static handler (`scripts/prerender.ts`) | Renders every route to a real HTML file at build time — preserves SEO and link previews, which a plain SPA loses. No third-party SSG package: see the note below |
 | Styling | **Tailwind CSS v4** + **shadcn/ui** | Fast, consistent typography and spacing; prebuilt accessible components without designing from scratch |
 | Content | Markdown + frontmatter → zod-validated JSON index (prebuild script) | Type-safe content, build-time errors on bad data, no database, no runtime Markdown parsing |
 | File storage | **Cloudflare R2** (S3-compatible), public bucket | Zero egress fees — the deciding factor when the product *is* downloads |
@@ -101,9 +101,18 @@ link unless you add a `404.html` redirect shim. Prerendering removes all three p
 costs one dependency plus a route list. The app is otherwise ordinary React — the same
 components hydrate and run client-side after load.
 
-If discovery turns out to be purely word-of-mouth and none of that matters, dropping
-`vite-react-ssg` for a plain SPA build is a small, reversible change: the React code is
+If discovery turns out to be purely word-of-mouth and none of that matters, dropping the
+prerender step for a plain SPA build is a small, reversible change: the React code is
 identical, only the build command and the 404 handling differ.
+
+### Why a hand-written prerenderer
+
+`vite-react-ssg`, the obvious off-the-shelf choice, peers on React Router 6 and has no
+support for the version 7 this project uses. Rather than hold the router back a major
+version for the sake of a build-time convenience, the prerenderer is ~150 lines in
+`scripts/prerender.ts` built on `createStaticHandler` / `StaticRouterProvider`, which
+React Router ships itself. It walks the same route table the browser uses, so the two
+cannot drift.
 
 ---
 
@@ -126,7 +135,7 @@ attachments:                                    # required, at least one
   - label: "Презентація"                        # human label shown on the button
     url: "https://files.zarlit.com.ua/6/odisseia-presentation.pptx"
     filename: "odisseia-presentation.pptx"
-    size: 4718592                               # bytes, for "4.5 МБ" in the UI
+    size: 4718592                               # optional; bytes, for "4,5 МБ" in the UI
     type: "pptx"                                # pptx | docx | pdf | xlsx | zip | other
 publishedAt: 2026-09-01                         # required, date
 updatedAt: 2026-09-14                           # optional
@@ -143,8 +152,21 @@ below the description. May be empty.
 
 1. reads every `content/lessons/**/*.md` with `gray-matter`,
 2. validates the frontmatter against a zod schema (`src/content/schema.ts`),
-3. renders the Markdown body to sanitised HTML with `markdown-it`,
-4. writes `src/generated/lessons.json` plus its generated TypeScript type.
+3. renders the Markdown body to HTML with `markdown-it`,
+4. writes `src/generated/lessons.json`.
+
+Beyond field validation it rejects three mistakes that a schema alone would not catch:
+a lesson whose `grade` disagrees with the directory it sits in (a misfiled lesson), two
+lessons sharing a `slug`, and two lessons in one grade sharing an `order` — which would
+otherwise make list order silently arbitrary.
+
+Two details worth knowing when hand-writing a lesson:
+
+- **Sanitisation** is `markdown-it`'s `html: false`, which escapes raw HTML in the body
+  rather than passing it through. Nothing a Markdown file contains can inject markup.
+- **Dates** may be written quoted or unquoted. YAML turns an unquoted `2026-08-28` into a
+  Date and a quoted one into a string; the schema accepts both and normalises to an ISO
+  date string, so authors need not remember which.
 
 The app imports that JSON, so no Markdown parser ships to the browser. A malformed lesson
 **fails the build** rather than shipping broken — intentional, since there is no CMS to
@@ -173,11 +195,34 @@ Grades 5–11, seven sections. Grade metadata (display name, short blurb) lives 
 | `/klas/:grade/:slug` | Lesson | Title, topic/work labels, full description, Markdown body, download buttons (one per attachment with label, type icon, size) |
 | `/pro-sait` | About | Who runs the site, contact email. **TODO**: page exists with placeholder copy; fill in before launch, or drop the route and its header link |
 | `*` | Not found | Links back to grade list; also emitted as `404.html` |
-| `/sitemap.xml`, `/robots.txt` | Generated | Emitted by the content build script from the same route list |
+| `/sitemap.xml`, `/robots.txt` | Generated | Emitted by the prerender step from the same route list |
 
 Every route above is enumerated at build time from `lessons.json` and prerendered to its own
-`index.html`. Per-page `<title>`, meta description, and Open Graph tags are set with
-`react-helmet-async`, which `vite-react-ssg` inlines into the emitted HTML.
+`index.html`.
+
+**URLs carry a trailing slash** (`/klas/6/`). Each page is a directory with an `index.html`,
+and a static host serves that file for the slashed URL while 301-redirecting the bare one —
+so linking to the slashed form means a full page load never pays for a redirect, and
+canonical URLs never point at a redirecting address. React Router ignores trailing slashes
+when matching, so client-side navigation is unaffected.
+
+**Link previews** use `public/og.jpg` (1200×630), declared once in `index.html` since it is
+the same for every page. It is generated from `scripts/assets/og.svg` by `npm run og`, which
+uses macOS built-ins rather than adding an image dependency to the project.
+
+**Structured data** (schema.org JSON-LD) is written into the prerendered HTML: `WebSite` on
+the home page, `LearningResource` on each lesson — grade as `educationalLevel`, the work
+studied as `about`, `isAccessibleForFree`, and a teacher audience. It is not maintained
+during client-side navigation: crawlers read the HTML as delivered, and none of them click
+through the app.
+
+**Head tags** come from `getPageMeta(path)` in `src/lib/meta.ts` — one function mapping a
+path to its title, description, canonical, and robots value. The prerenderer writes its
+output into the static HTML; `DocumentMeta` applies it again on client-side navigation.
+Because both read the same function, a page's tags cannot differ between the two. The tags
+it rewrites are marked by `id` in `index.html`. This replaces the `react-helmet-async`
+the spec originally called for: with one metadata function there is nothing left for a
+head-management library to do.
 
 Slugs are Latin-transliterated (`odisseia-obraz-odisseia`), lowercase, hyphenated — readable
 URLs that survive copy-paste into messengers, which Cyrillic percent-encoding does not.
@@ -229,6 +274,9 @@ for it to ship to the public site.
   when a file is replaced, so a corrected file never serves stale from cache.
 - Suggested limits enforced by the admin tool: 50 MB per file, allowed types
   `pdf, docx, doc, pptx, ppt, xlsx, zip`.
+- `size` is optional in the schema: the admin tool always records it, but a hand-written
+  lesson should not have to stat the file, and a guessed number is worse than none. The
+  download row shows the size only when it is known.
 - Write credentials (an R2 API token scoped to this one bucket) exist only in the local `.env`.
   CI never touches R2 — it only builds HTML.
 
@@ -236,10 +284,13 @@ for it to ship to the public site.
 
 ## 7. Build and deployment
 
-- **Trigger**: push to `main`.
-- **Workflow**: `actions/checkout` → `npm ci` → `npm run build` (content script, then
-  `vite-react-ssg build`) → `actions/upload-pages-artifact` → `actions/deploy-pages`.
-  No secrets required.
+- **Trigger**: push to `main` or `master`, plus manual `workflow_dispatch` to redeploy
+  without a commit. Deploys are queued rather than cancelled, so two pushes cannot race.
+- **Workflow**: `actions/checkout` → `npm ci` → `npm run build` → `actions/upload-pages-artifact`
+  → `actions/deploy-pages`. No secrets required.
+- `npm run build` is four steps: `build-content.ts` (Markdown → `lessons.json`) → `tsc -b` →
+  `vite build` (client bundle) → `vite build --ssr` (Node bundle of the app) →
+  `prerender.ts` (HTML per route, plus `404.html`, `sitemap.xml`, `robots.txt`).
 - **Output**: static HTML in `dist/` — one directory per route, plus hashed JS/CSS assets —
   served by GitHub Pages over HTTPS. Deep links resolve to real files, so no SPA redirect shim.
 - **Custom domain**: `zarlit.com.ua`, set by a `CNAME` file in `public/` containing that name.
@@ -255,13 +306,21 @@ for it to ship to the public site.
 
 ## 8. Analytics
 
-GoatCounter, script loaded from the site head. No cookies, no personal data, so no consent banner
-is required under Ukrainian or EU rules.
+GoatCounter. No cookies and no personal data, so no consent banner is required under
+Ukrainian or EU rules.
+
+The site code lives in `analytics.goatcounterCode` in `src/data/site.ts`. **While it is empty
+no script is loaded at all** — so local development and preview builds never reach the
+service, and the numbers stay clean without an environment check.
 
 Tracked:
 - Page views per lesson and per grade — shows which grades need more material.
 - **Download clicks** as explicit events (`download:<grade>/<slug>/<label>`), fired on the
   download button. Since files are served from R2, downloads are otherwise invisible.
+
+Because the site is a single-page app after first load, the automatic page view is suppressed
+(`no_onload`) and counting is driven by route changes instead — so the landing page and every
+page after it are recorded the same way, and never twice.
 
 ---
 
@@ -284,10 +343,14 @@ Deferred features, and the cheapest path to each if v1 proves out:
 ```
 zarlit/
 ├─ content/lessons/{5..11}/*.md        lesson content (the actual data)
-├─ scripts/build-content.ts            md → validated lessons.json + sitemap
+├─ scripts/
+│  ├─ build-content.ts                 md → validated lessons.json
+│  └─ prerender.ts                     route HTML + 404 + sitemap + robots
 ├─ src/
-│  ├─ main.tsx, routes.tsx             app entry + route definitions
+│  ├─ main.tsx, routes.tsx             client entry + route definitions
+│  ├─ entry-server.tsx                 static-render entry used by prerender.ts
 │  ├─ content/schema.ts                zod schema for lesson frontmatter
+│  ├─ lib/meta.ts                      path → title/description/canonical
 │  ├─ generated/lessons.json           build artefact, gitignored
 │  ├─ pages/                           Home, Grade, Lesson, About, NotFound
 │  ├─ components/                      shared components + shadcn/ui
@@ -304,11 +367,13 @@ zarlit/
 
 ## 11. Milestones
 
-1. **Skeleton** — Vite + React + Tailwind + shadcn, routing, layout, home and grade pages
+1. **Skeleton** ✅ — Vite + React + Tailwind + shadcn, routing, layout, home and grade pages
    with hardcoded data.
-2. **Content pipeline** — zod schema, `build-content.ts`, lesson pages, prerendering wired up,
-   2–3 real lessons committed by hand.
-3. **Ship** — GitHub Actions deploy, custom domain, SEO tags, sitemap, analytics.
+2. **Content pipeline** ✅ — zod schema, `build-content.ts`, lesson pages, prerendering wired
+   up, sample lessons committed by hand.
+3. **Ship** ✅ — GitHub Actions deploy, `CNAME`, SEO tags, sitemap, structured data,
+   link-preview image, analytics. Going live now needs only the accounts and DNS set up
+   (README, "First-time setup") — no further code.
 4. **Admin tool** — R2 upload, Markdown generation, reordering, edit/delete.
 5. **Fill** — bulk-add real lessons; refine UI against real content.
 
@@ -324,8 +389,9 @@ only pays off once the shape of the content is settled — hence its position af
 | Site description | `site.description` | Generic Ukrainian one-liner about lesson materials for grades 5–11 |
 | Contact email | `site.email` | Empty string — the About page hides the contact block while it is empty |
 | About page copy | `src/pages/About.tsx` | Lorem-free stub: one paragraph saying who runs the site, marked `TODO` |
-| OG preview image | `public/og.png` | Plain image with the site title on the brand background |
-| Favicon | `public/favicon.svg` | Simple book/letter glyph |
+| ~~OG preview image~~ | `public/og.jpg` | Done — generated, 1200×630, regenerate with `npm run og` |
+| ~~Favicon~~ | `public/favicon.svg` | Done — simple book glyph |
+| GoatCounter code | `site.analytics.goatcounterCode` | Empty — no analytics script loads until it is set |
 
 ### Deferred decision: pagination
 

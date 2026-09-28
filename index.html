@@ -4,11 +4,52 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Tags carrying an id are rewritten per page by scripts/prerender.ts at
+      build time, and kept in step during client-side navigation by
+      src/components/document-meta.tsx.
+    -->
     <title>Зарубіжна література в українській школі</title>
     <meta
+      id="meta-description"
       name="description"
       content="Матеріали до уроків зарубіжної літератури для 5–11 класів: розробки уроків, презентації та роздаткові матеріали для вчителів."
     />
+    <meta id="meta-robots" name="robots" content="index, follow" />
+    <link id="meta-canonical" rel="canonical" href="https://zarlit.com.ua/" />
+    <meta id="meta-og-title" property="og:title" content="Зарубіжна література в українській школі" />
+    <meta
+      id="meta-og-description"
+      property="og:description"
+      content="Матеріали до уроків зарубіжної літератури для 5–11 класів: розробки уроків, презентації та роздаткові матеріали для вчителів."
+    />
+    <meta id="meta-og-url" property="og:url" content="https://zarlit.com.ua/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://zarlit.com.ua/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Зарубіжна література в українській школі — матеріали до уроків для 5–11 класів" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:locale" content="uk_UA" />
+    <meta property="og:site_name" content="Зарубіжна література в українській школі" />
+
+    <script>
+      // Set the theme before first paint, so a visitor who prefers dark never
+      // sees a white flash. Must agree with src/components/theme-toggle.tsx.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('theme')
+          var dark =
+            stored === 'dark' ||
+            (!stored &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (error) {
+          /* private mode: fall back to the light theme */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

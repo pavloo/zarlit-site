@@ -29,3 +29,6 @@ src/generated/
 # Local admin credentials (milestone 4)
 .env
 .env.local
+
+# SSR bundle used only during the prerender step
+dist-ssr/

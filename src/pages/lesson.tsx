@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { getLesson } from '@/data/lessons'
 import { isGrade } from '@/data/types'
+import { trackDownload } from '@/lib/analytics'
 import { formatDate, formatFileSize } from '@/lib/format'
 import { paths } from '@/lib/paths'
 import { cn } from '@/lib/utils'
@@ -51,6 +52,9 @@ export function LessonPage() {
               <a
                 href={attachment.url}
                 download={attachment.filename}
+                onClick={() =>
+                  trackDownload(paths.lesson(lesson), attachment.label)
+                }
                 className="hover:border-primary/50 hover:bg-accent/40 flex items-center gap-4 rounded-lg border p-4 transition-colors"
               >
                 <span className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-md">
@@ -59,8 +63,9 @@ export function LessonPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{attachment.label}</span>
                   <span className="text-muted-foreground block text-sm">
-                    {attachment.type.toUpperCase()} ·{' '}
-                    {formatFileSize(attachment.size)}
+                    {attachment.type.toUpperCase()}
+                    {attachment.size !== undefined &&
+                      ` · ${formatFileSize(attachment.size)}`}
                   </span>
                 </span>
                 <span

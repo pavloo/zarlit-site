@@ -2,6 +2,8 @@ import { BookOpen } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 
+import { Analytics } from '@/components/analytics'
+import { DocumentMeta } from '@/components/document-meta'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { gradeList } from '@/data/grades'
 import { site } from '@/data/site'
@@ -22,6 +24,8 @@ export function SiteLayout() {
   return (
     <div className="flex min-h-screen flex-col">
       <ScrollToTop />
+      <DocumentMeta />
+      <Analytics />
 
       <header className="bg-background/85 sticky top-0 z-20 border-b backdrop-blur">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3">
