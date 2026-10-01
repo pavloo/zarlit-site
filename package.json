@@ -16,7 +16,7 @@
     "desktop:main": "vite build --config desktop/vite.config.ts",
     "desktop:build": "npm run desktop:renderer && npm run desktop:main",
     "desktop": "npm run desktop:build && electron desktop/dist/main.cjs",
-    "desktop:dist": "npm run desktop:build && electron-builder"
+    "desktop:dist": "npm run desktop:build && electron-builder --publish never"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -53,5 +53,7 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
   },
-  "main": "desktop/dist/main.cjs"
+  "main": "desktop/dist/main.cjs",
+  "description": "Матеріали до уроків зарубіжної літератури для 5–11 класів",
+  "author": "Pavlo Osadchyi"
 }
