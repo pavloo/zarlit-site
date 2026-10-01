@@ -5,45 +5,50 @@ import {
 } from '@aws-sdk/client-s3'
 
 import { site } from '../../src/data/site.ts'
+import { getConfig, type R2Config } from './config.ts'
 import { slugifyLabel } from './slug.ts'
 
 /*
   R2 speaks the S3 API, so the standard AWS client works against it. The
-  credentials are a bucket-scoped API token in a gitignored .env; CI never
-  sees them, because the deploy only builds HTML.
+  credentials come from the running configuration — a gitignored .env for
+  `npm run admin`, the OS keychain inside the desktop app — never from a
+  committed file. CI never sees them, because the deploy only builds HTML.
 */
 
-const {
-  R2_ACCOUNT_ID,
-  R2_ACCESS_KEY_ID,
-  R2_SECRET_ACCESS_KEY,
-  R2_BUCKET,
-} = process.env
+export const r2Configured = () => getConfig().r2 !== null
 
-export const r2Configured = Boolean(
-  R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET,
-)
+/*
+  Cached per credential set: the client is rebuilt when the user saves new
+  settings in the desktop app, rather than keeping the old keys alive.
+*/
+let cached: { key: string; client: S3Client } | null = null
 
-let client: S3Client | null = null
+function clientFor(r2: R2Config): S3Client {
+  const key = `${r2.accountId}:${r2.accessKeyId}:${r2.bucket}`
+  if (cached?.key === key) return cached.client
 
-function getClient(): S3Client {
-  if (!r2Configured) {
-    throw new Error(
-      'R2 is not configured. Copy .env.example to .env and fill it in, ' +
-        'or paste a file URL instead of uploading.',
-    )
-  }
-
-  client ??= new S3Client({
+  const client = new S3Client({
     region: 'auto',
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    endpoint: `https://${r2.accountId}.r2.cloudflarestorage.com`,
     credentials: {
-      accessKeyId: R2_ACCESS_KEY_ID!,
-      secretAccessKey: R2_SECRET_ACCESS_KEY!,
+      accessKeyId: r2.accessKeyId,
+      secretAccessKey: r2.secretAccessKey,
     },
   })
 
+  cached = { key, client }
   return client
+}
+
+function requireR2(): R2Config {
+  const { r2 } = getConfig()
+  if (!r2) {
+    throw new Error(
+      'R2 is not configured. Add the credentials in Settings, or paste a ' +
+        'file URL instead of uploading.',
+    )
+  }
+  return r2
 }
 
 /** `6/homer-odisseia-prezentatsiia.pptx` — human-browsable in the dashboard. */
@@ -68,9 +73,11 @@ export async function uploadFile(
   body: Buffer,
   contentType: string,
 ): Promise<UploadResult> {
-  await getClient().send(
+  const r2 = requireR2()
+
+  await clientFor(r2).send(
     new PutObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: r2.bucket,
       Key: key,
       Body: body,
       ContentType: contentType,
@@ -84,8 +91,9 @@ export async function uploadFile(
 }
 
 export async function deleteFile(key: string) {
-  await getClient().send(
-    new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }),
+  const r2 = requireR2()
+  await clientFor(r2).send(
+    new DeleteObjectCommand({ Bucket: r2.bucket, Key: key }),
   )
 }
 

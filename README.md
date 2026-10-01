@@ -13,7 +13,9 @@ npm run build    # validate content, typecheck, build, prerender → dist/
 npm run preview  # serve dist/ at http://localhost:4173
 npm run lint
 npm run og       # regenerate public/og.jpg (macOS only)
-npm run admin    # local authoring tool, http://127.0.0.1:5174
+npm run admin    # local authoring tool in the browser, http://127.0.0.1:5174
+npm run desktop  # the same tool as a desktop app (Electron)
+npm run desktop:dist  # build an installer for this platform
 ```
 
 ## Adding a lesson
@@ -43,6 +45,42 @@ Notes on the admin tool:
   already shared, so the slug and grade are read-only when editing.
 - Deleting asks whether to remove the files from storage too; removing only the record
   leaves the files reachable by anyone who already has the link.
+
+## The desktop app
+
+`desktop/` wraps the authoring tool as an Electron app, so the site can be updated on a
+Windows or Mac machine with no Node, no git and no terminal. It is the same server and UI
+as `npm run admin`, with three additions: a Settings screen, a repository clone it manages
+itself, and a Publish button.
+
+**Setup, once:** open Settings and enter the R2 credentials and a GitHub fine-grained token
+with `Contents: Read and write` on the site repository. Saving clones the repository into
+the app's own data folder. Credentials are encrypted with the OS keystore (DPAPI on
+Windows, Keychain on macOS) and never touch the repository.
+
+**Day to day:** add or edit a lesson, then press **Опублікувати**. The app commits the
+changed lesson files and pushes; the existing GitHub Actions workflow builds and deploys,
+so the site updates about a minute later. Nothing is built on the local machine, and the
+build that produces the live site stays the one in CI.
+
+A token is used rather than an SSH key on purpose: no git binary has to be installed, and
+the token is scoped to one repository and revocable from github.com if a laptop is lost.
+
+### Installers
+
+`npm run desktop:dist` builds for the platform you are on. For both platforms, run the
+**Build desktop app** workflow in the Actions tab — a Windows runner produces the `.exe`
+and a macOS runner the `.dmg`, which is also the way to get a Windows installer without
+needing Wine on a Mac.
+
+Both are unsigned, so the first launch is blocked:
+
+- **Windows** — SmartScreen shows "Windows protected your PC": More info → Run anyway.
+- **macOS** — Gatekeeper refuses to open it: right-click the app → Open, or run
+  `xattr -dr com.apple.quarantine /Applications/Zarlit.app`.
+
+Signing removes both warnings but needs a paid certificate on Windows and an Apple
+Developer account on macOS. Worth it only if the app is distributed to other teachers.
 
 ## First-time setup
 
@@ -92,8 +130,9 @@ loads at all, which keeps local development out of the numbers.
 
 ## Status
 
-Milestones 1–4 of 5 done: scaffold and pages; Markdown content pipeline with build-time
-prerendering; deploy workflow, custom domain, SEO and analytics; local admin tool. The site
-is ready to go live as soon as the setup above is done.
+The site is live at [zarlit.com.ua](https://zarlit.com.ua), deployed from `master` by
+GitHub Actions. Milestones 1–4 are done, plus the desktop app. It currently has no lessons:
+every grade reads «Матеріали готуються» until real ones are added.
 
-Next: milestone 5 — fill in real lessons and refine the UI against them. See SPEC.md §11.
+Still placeholders: `analytics.goatcounterCode` (nothing is recorded until it is set) and
+the About page text, both in `src/data/site.ts` and `src/pages/about.tsx`.

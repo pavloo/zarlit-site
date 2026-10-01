@@ -1,0 +1,49 @@
+name: Build desktop app
+
+# Run manually from the Actions tab, or by pushing a tag like desktop-v1.
+# Building the Windows installer on a Windows runner avoids needing Wine on a
+# Mac, and the macOS build has to run on macOS to produce a .dmg at all.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            artifact: 'desktop/release/*.exe'
+          - os: macos-latest
+            name: macos
+            artifact: 'desktop/release/*.dmg'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Unsigned on purpose: signing needs a paid certificate on Windows and an
+      # Apple Developer account on macOS. Both installers warn on first run.
+      - run: npm run desktop:dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zarlit-${{ matrix.name }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error

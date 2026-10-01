@@ -1,13 +1,13 @@
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import matter from 'gray-matter'
 
 import { frontmatterSchema, type Frontmatter } from '../../src/content/schema.ts'
+import { getConfig } from './config.ts'
 
-const root = fileURLToPath(new URL('../..', import.meta.url))
-const contentDir = join(root, 'content/lessons')
+/** Resolved per call: the desktop app points this at a clone it manages. */
+const contentDir = () => join(getConfig().repoRoot, 'content/lessons')
 
 export interface LessonFile extends Frontmatter {
   slug: string
@@ -15,7 +15,7 @@ export interface LessonFile extends Frontmatter {
 }
 
 function lessonPath(grade: number, slug: string): string {
-  return join(contentDir, String(grade), `${slug}.md`)
+  return join(contentDir(), String(grade), `${slug}.md`)
 }
 
 /*
@@ -44,9 +44,13 @@ export async function readLesson(
 }
 
 export async function listLessons(grade?: number): Promise<LessonFile[]> {
-  const entries = await readdir(contentDir, {
+  const entries = await readdir(contentDir(), {
     recursive: true,
     withFileTypes: true,
+  }).catch((error: NodeJS.ErrnoException) => {
+    // No lessons yet is a valid state: a fresh clone, or all of them deleted.
+    if (error.code === 'ENOENT') return []
+    throw error
   })
 
   const lessons = await Promise.all(

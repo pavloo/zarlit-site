@@ -11,7 +11,12 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "og": "./scripts/make-og.sh",
-    "admin": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js --config admin/vite.config.ts"
+    "admin": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js --config admin/vite.config.ts",
+    "desktop:renderer": "vite build --config admin/vite.config.ts --outDir ../desktop/dist/renderer --emptyOutDir",
+    "desktop:main": "vite build --config desktop/vite.config.ts",
+    "desktop:build": "npm run desktop:renderer && npm run desktop:main",
+    "desktop": "npm run desktop:build && electron desktop/dist/main.cjs",
+    "desktop:dist": "npm run desktop:build && electron-builder"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -37,12 +42,16 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "express": "^5.2.1",
+    "isomorphic-git": "^1.42.5",
     "multer": "^2.4.0",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.3.3",
     "tiptap-markdown": "^0.9.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
-  }
+  },
+  "main": "desktop/dist/main.cjs"
 }

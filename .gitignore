@@ -32,3 +32,7 @@ src/generated/
 
 # SSR bundle used only during the prerender step
 dist-ssr/
+
+# Desktop app build output and installers
+desktop/dist/
+desktop/release/

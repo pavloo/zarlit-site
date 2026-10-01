@@ -17,8 +17,33 @@ export interface LessonFile {
 
 export interface AdminConfig {
   r2Configured: boolean
+  githubConfigured: boolean
+  /** True inside the desktop app, where settings and publishing exist. */
+  desktop: boolean
   grades: Grade[]
   maxFileBytes: number
+}
+
+export interface SettingsView {
+  r2: { accountId: string; accessKeyId: string; bucket: string } | null
+  github: { repo: string; authorName: string; authorEmail: string } | null
+  hasR2Secret: boolean
+  hasGitHubToken: boolean
+  encryptionAvailable: boolean
+}
+
+export interface PublishStatus {
+  changed: string[]
+  ahead: number
+  configured: boolean
+}
+
+export interface PublishResult {
+  committed: boolean
+  sha?: string
+  pushed: boolean
+  changed: string[]
+  actionsUrl: string
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -69,6 +94,18 @@ export const api = {
 
   slugFor: (title: string) =>
     request<{ slug: string }>('/slug', json({ title })),
+
+  getSettings: () => request<SettingsView>('/settings'),
+
+  saveSettings: (settings: unknown) =>
+    request<{ ok: true }>('/settings', { ...json(settings), method: 'PUT' }),
+
+  sync: () => request<{ ok: true }>('/sync', json({})),
+
+  publishStatus: () => request<PublishStatus>('/publish'),
+
+  publish: (message?: string) =>
+    request<PublishResult>('/publish', json({ message })),
 
   upload: (file: File, grade: Grade, slug: string, label: string) => {
     const form = new FormData()

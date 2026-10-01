@@ -7,7 +7,7 @@ downloadable files.
 **Site title**: Зарубіжна література в українській школі
 **Domain**: `zarlit.com.ua` · **Files**: `files.zarlit.com.ua`
 
-Status: v1.7, milestones 1–4 built · Language of the site: Ukrainian only
+Status: v1.8, live; milestones 1–4 plus the desktop app · Language of the site: Ukrainian only
 
 > Items marked **TODO** below are placeholders: they are wired into the code so nothing is
 > blocked, and swapping in the real text is a one-line edit in `src/data/site.ts`.
@@ -402,12 +402,40 @@ zarlit/
    (README, "First-time setup") — no further code.
 4. **Admin tool** ✅ — R2 upload, Markdown generation, reordering, edit/delete.
 5. **Fill** — bulk-add real lessons; refine UI against real content.
+6. **Desktop app** ✅ — the authoring tool as an installable Electron app, so the site can
+   be updated from a Windows or Mac machine with no Node, git or terminal.
 
 Milestone 4 landed after milestone 3 as planned: hand-writing the first lessons settled what
 the form actually needed, so the tool was built once rather than twice.
 
 Milestones 1–3 produce a live, usable site. The admin tool is a productivity investment that
 only pays off once the shape of the content is settled — hence its position after launch.
+
+---
+
+## 11a. The desktop app (`desktop/`)
+
+Added after launch, when the tool's user turned out to be someone working on Windows
+rather than in a terminal. It is a wrapper, not a rewrite: the same Express API and React
+UI that `npm run admin` serves, started inside Electron on an ephemeral loopback port, with
+the window pointed at it. That avoids a second implementation of uploading, writing lesson
+files and publishing behind an IPC layer.
+
+| Concern | Decision |
+|---|---|
+| GitHub auth | A fine-grained token over HTTPS, via isomorphic-git. No SSH key, so no git binary has to be installed and nothing has to manage `known_hosts`; the token is scoped to one repository and revocable from the web |
+| Publishing | Commit the changed lesson files and push. GitHub Actions builds and deploys, so the machine needs no toolchain and the build behind the live site stays the one in CI |
+| Repository | Cloned into the app's data folder on first save of a token, shallow. The user never picks a folder or sees a checkout |
+| Credentials | Encrypted with Electron `safeStorage` — DPAPI on Windows, Keychain on macOS — in the app's data folder, never in the repository. If the OS offers no keystore the app says so rather than silently writing plaintext |
+| Packaging | electron-builder; unsigned. Both platforms are built in CI, which is also how a Windows installer is produced without Wine on a Mac |
+
+The server modules take their repository path and credentials from `admin/server/config.ts`
+rather than reading `process.env` and their own file location, which is what let the same
+code serve a developer checkout and a managed clone.
+
+Publishing failures are translated into plain Ukrainian — an expired token, a missing
+repository, no network, or someone else's newer commits — because "HTTP Error: 401" tells
+the person using this app nothing they can act on.
 
 ---
 

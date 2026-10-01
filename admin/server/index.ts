@@ -1,4 +1,5 @@
 import express, { type Request, type Response } from 'express'
+import type { GitHubConfig, R2Config } from './config.ts'
 import multer from 'multer'
 
 import {
@@ -15,6 +16,8 @@ import {
   writeLesson,
   type LessonFile,
 } from './content.ts'
+import { getConfig, setConfig } from './config.ts'
+import { publish, publishStatus, syncRepo } from './publish.ts'
 import {
   deleteFile,
   keyFromUrl,
@@ -53,12 +56,27 @@ function parseGrade(value: string): Grade {
   Router receives an undecorated ServerResponse, where `res.json` does not
   exist.
 */
-export function createApiApp() {
+export interface DesktopHooks {
+  saveSettings: (settings: {
+    r2: R2Config | null
+    github: GitHubConfig | null
+  }) => void
+  encryptionAvailable: () => boolean
+}
+
+export function createApiApp(hooks?: DesktopHooks) {
   const api = express()
   api.use(express.json({ limit: '1mb' }))
 
   api.get('/config', (_req, res) => {
-    res.json({ r2Configured, grades, maxFileBytes: MAX_FILE_BYTES })
+    const { desktop, github } = getConfig()
+    res.json({
+      r2Configured: r2Configured(),
+      githubConfigured: Boolean(github?.token),
+      desktop,
+      grades,
+      maxFileBytes: MAX_FILE_BYTES,
+    })
   })
 
   api.get('/lessons', async (req, res) => {
@@ -117,7 +135,7 @@ export function createApiApp() {
     const removeFiles = req.query.files === 'true'
     const removedKeys: string[] = []
 
-    if (removeFiles && r2Configured) {
+    if (removeFiles && r2Configured()) {
       for (const attachment of lesson.attachments) {
         const key = keyFromUrl(attachment.url)
         if (key) {
@@ -172,6 +190,65 @@ export function createApiApp() {
       type: attachmentType(originalName),
     })
   })
+
+  /*
+    Settings and publishing exist only in the desktop app. Under
+    `npm run admin` credentials come from .env and publishing is the
+    developer's own git, so these routes are not mounted at all.
+  */
+  if (hooks) {
+    api.get('/settings', (_req, res) => {
+      const { r2, github } = getConfig()
+      res.json({
+        // The secrets themselves are never sent back to the UI; it only needs
+        // to know whether each one is set.
+        r2: r2 && { ...r2, secretAccessKey: '' },
+        github: github && { ...github, token: '' },
+        hasR2Secret: Boolean(r2?.secretAccessKey),
+        hasGitHubToken: Boolean(github?.token),
+        encryptionAvailable: hooks.encryptionAvailable(),
+      })
+    })
+
+    api.put('/settings', async (req, res) => {
+      const body = req.body as {
+        r2: (R2Config & { secretAccessKey: string }) | null
+        github: (GitHubConfig & { token: string }) | null
+      }
+      const current = getConfig()
+
+      // An empty secret field means "keep the stored one", so that the UI can
+      // show settings without ever holding the secret.
+      const r2 = body.r2 && {
+        ...body.r2,
+        secretAccessKey:
+          body.r2.secretAccessKey || current.r2?.secretAccessKey || '',
+      }
+      const github = body.github && {
+        ...body.github,
+        token: body.github.token || current.github?.token || '',
+      }
+
+      setConfig({ r2, github })
+      hooks.saveSettings({ r2, github })
+
+      res.json({ ok: true })
+    })
+
+    api.post('/sync', async (_req, res) => {
+      await syncRepo()
+      res.json({ ok: true })
+    })
+
+    api.get('/publish', async (_req, res) => {
+      res.json(await publishStatus())
+    })
+
+    api.post('/publish', async (req, res) => {
+      const { message } = req.body as { message?: string }
+      res.json(await publish(message))
+    })
+  }
 
   api.post('/slug', (req, res) => {
     res.json({ slug: slugify(String((req.body as { title: string }).title)) })

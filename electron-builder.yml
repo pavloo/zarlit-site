@@ -1,0 +1,36 @@
+# Packaging for the local authoring tool (desktop/). The website itself is not
+# involved: only the built Electron app is shipped.
+appId: ua.com.zarlit.admin
+productName: Zarlit
+copyright: Zarlit
+
+directories:
+  output: desktop/release
+  buildResources: desktop/build
+
+# Everything the main process needs is bundled into main.cjs by Vite, so no
+# node_modules are packaged — electron-builder would otherwise skip them
+# anyway, since the server's libraries are devDependencies of the website.
+files:
+  - desktop/dist/**/*
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Unsigned: Windows SmartScreen shows a warning on first run.
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.education
+  # Unsigned and un-notarised, so Gatekeeper blocks the first launch:
+  # right-click → Open, or xattr -dr com.apple.quarantine on the app.
+  identity: null
