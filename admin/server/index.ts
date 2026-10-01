@@ -140,12 +140,22 @@ export function createApiApp() {
   api.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) throw new Error('No file received')
 
+    /*
+      Multipart file names arrive latin1-decoded, so a Ukrainian file name
+      reaches us as mojibake ("Ð\x94Ñ\x96..." for "Ді..."). Re-reading those
+      bytes as UTF-8 restores it. The name is what the browser saves the
+      download as, so getting it wrong is visible to every teacher.
+    */
+    const originalName = Buffer.from(req.file.originalname, 'latin1').toString(
+      'utf8',
+    )
+
     const { grade, slug, label } = req.body as Record<string, string>
     const key = objectKey(
       parseGrade(grade),
       slugify(slug),
       label,
-      req.file.originalname,
+      originalName,
     )
 
     const { url, size } = await uploadFile(
@@ -157,9 +167,9 @@ export function createApiApp() {
     res.json({
       label,
       url,
-      filename: req.file.originalname,
+      filename: originalName,
       size,
-      type: attachmentType(req.file.originalname),
+      type: attachmentType(originalName),
     })
   })
 

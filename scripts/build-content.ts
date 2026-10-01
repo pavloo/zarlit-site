@@ -25,7 +25,16 @@ const md = new MarkdownIt({
 })
 
 async function markdownFiles(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { recursive: true, withFileTypes: true })
+  // A site with no lessons yet is a valid state — a fresh clone, or every
+  // lesson deleted — so a missing directory is empty, not an error.
+  const entries = await readdir(dir, {
+    recursive: true,
+    withFileTypes: true,
+  }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return []
+    throw error
+  })
+
   return entries
     .filter((entry) => entry.isFile() && extname(entry.name) === '.md')
     .map((entry) => join(entry.parentPath, entry.name))
